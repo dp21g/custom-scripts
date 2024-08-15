@@ -1,6 +1,6 @@
 {
     "cd run promise dev": {
-        "command": "npm run dev -- --open",
+        "command": "cd C:\\Users\\mail\\github\\121Dating; if ($?) { npm run dev -- --open }",
         "action": "Send"
     },
     "cd to promise folder": {
@@ -8,11 +8,11 @@
         "action": "Send"
     },
     "run find fvg python script": {
-        "command": "cd C:\\Users\\mail\\github\\find-fvg && python find-fvg.py",
+        "command": "cd C:\\Users\\mail\\github\\find-fvg; if ($?) { python find-fvg.py }",
         "action": "Send"
     },
     "run find fvg server html": {
-        "command": "cd C:\\Users\\mail\\github\\find-fvg && python -m http.server 8000",
+        "command": "cd C:\\Users\\mail\\github\\find-fvg; if ($?) { python -m http.server 8000 }",
         "action": "Send"
     },
     "cd to fvg": {

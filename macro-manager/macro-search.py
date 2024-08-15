@@ -11,6 +11,7 @@ import time
 from pynput import keyboard
 import threading
 import queue
+import ctypes
 
 # Use a relative path for logging
 log_file_path = os.path.join(os.path.dirname(__file__), 'python_logfile.txt')
@@ -69,13 +70,40 @@ def load_macros():
     with open(macros_file_path, "r") as file:
         logging.info(f"Loading macros from {macros_file_path}")
         return json.load(file)
+    
+def show_and_focus_window():
+    global root, search_entry
+    if root is None or not root.winfo_exists():
+        create_and_show_window()
+    else:
+        root.deiconify()
+        root.attributes('-topmost', True)
+        root.update()
+        root.attributes('-topmost', False)
+        
+        # Force Windows to update the window stack
+        root.update()
+
+        # Get the window handle
+        hwnd = ctypes.windll.user32.GetParent(root.winfo_id())
+
+        # Bring the window to the foreground
+        ctypes.windll.user32.ShowWindow(hwnd, 5)  # SW_SHOW
+        ctypes.windll.user32.SetForegroundWindow(hwnd)
+
+        # Alternative method to try and force focus
+        ctypes.windll.user32.keybd_event(0x12, 0, 0, 0)  # VK_MENU
+        ctypes.windll.user32.keybd_event(0x12, 0, 2, 0)  # VK_MENU
+
+        # Set focus to the search entry
+        root.after(100, lambda: search_entry.focus_set())
 
 def save_macros(macros):
     macros_file_path = os.path.join(os.path.dirname(__file__), 'macros.json')
     logging.info(f"Saving macros to {macros_file_path}")
     with open(macros_file_path, "w") as file:
         json.dump(macros, file, indent=4)
-
+        
 def send_to_app(command):
     logging.info(f"Sending command to application: {command}")
     last_app_window = ctypes.windll.user32.GetForegroundWindow()
@@ -259,15 +287,7 @@ def create_and_show_window():
         macros = load_macros()
         refresh_listbox()
 
-    root.deiconify()
-    root.lift()
-    root.focus_force()
-    root.attributes('-topmost', True)
-    root.update()
-    root.attributes('-topmost', False)
-    
-    if search_entry:
-        search_entry.focus_set()
+    show_and_focus_window()
 
 def move_focus_to_listbox(event):
     if listbox.size() > 0:
@@ -305,7 +325,7 @@ def process_ui_events():
 
 def on_activate():
     logging.info("Hotkey detected, showing Macro Manager")
-    ui_queue.put(create_and_show_window)
+    ui_queue.put(show_and_focus_window)
 
 def on_press(key):
     global caps_lock_presses
