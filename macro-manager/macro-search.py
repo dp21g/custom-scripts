@@ -9,6 +9,7 @@ import pyperclip
 import time
 from pynput import keyboard
 import threading
+import queue
 
 # Use a relative path for logging
 log_file_path = os.path.join(os.path.dirname(__file__), 'python_logfile.txt')
@@ -137,11 +138,12 @@ def delete_macro():
         refresh_listbox()
 
 def refresh_listbox(search_query=''):
-    logging.info("Refreshing listbox...")
-    listbox.delete(0, tk.END)
-    for key in macros.keys():
-        if search_query.lower() in key.lower():
-            listbox.insert(tk.END, key)
+    global listbox
+    if listbox:
+        listbox.delete(0, tk.END)
+        for key in macros.keys():
+            if search_query.lower() in key.lower():
+                listbox.insert(tk.END, key)
     logging.debug(f"Listbox contents: {list(macros.keys())}")
 
 def on_search_enter(event):
@@ -160,66 +162,82 @@ def update_listbox(*args):
     search_query = search_var.get()
     refresh_listbox(search_query)
 
+root = None
+listbox = None
+search_entry = None
+current_keys = set()
+stop_event = threading.Event()
+ui_queue = queue.Queue()
+
 def create_and_show_window():
-    global root, listbox, macros, search_var
-    if root is not None:
-        root.deiconify()
-        center_window(root, 600, 600)
-        root.lift()  # Lift the window to the top of the stacking order
-        root.focus_force()  # Force focus on the window
-        return
+    global root, listbox, search_entry
+    if root is None or not root.winfo_exists():
+        root = tk.Tk()
+        root.title("Macro Manager")
 
-    root = tk.Tk()
-    root.title("Macro Manager")
+        window_width = 600
+        window_height = 600
+        center_window(root, window_width, window_height)
+        root.resizable(True, True)
 
-    window_width = 600
-    window_height = 600
-    center_window(root, window_width, window_height)
-    root.resizable(True, True)
+        search_var = tk.StringVar()
+        search_var.trace("w", update_listbox)
+        search_entry = tk.Entry(root, textvariable=search_var)
+        search_entry.pack(fill=tk.X, padx=5, pady=5)
 
-    # Set window to be topmost
-    root.attributes('-topmost', True)
+        listbox = tk.Listbox(root)
+        listbox.pack(fill=tk.BOTH, expand=True)
+
+        add_button = tk.Button(root, text="Add", command=add_macro)
+        add_button.pack(side=tk.LEFT)
+
+        edit_button = tk.Button(root, text="Edit", command=edit_macro)
+        edit_button.pack(side=tk.LEFT)
+
+        delete_button = tk.Button(root, text="Delete", command=delete_macro)
+        delete_button.pack(side=tk.LEFT)
+
+        listbox.bind('<Return>', on_enter)
+        search_entry.bind('<Return>', on_search_enter)
+
+        root.protocol("WM_DELETE_WINDOW", on_closing)
+
+        # Load macros and refresh listbox
+        global macros
+        macros = load_macros()
+        refresh_listbox()
+
+    root.deiconify()  # Ensure the window is visible
+    root.lift()  # Bring the window to the front
+    root.focus_force()  # Force focus on the window
+    root.attributes('-topmost', True)  # Make the window topmost
     root.update()
-
-    search_var = StringVar()
-    search_var.trace("w", update_listbox)
-    search_entry = Entry(root, textvariable=search_var)
-    search_entry.pack(fill=tk.X, padx=5, pady=5)
-    search_entry.focus_set()
-
-    search_entry.bind('<Return>', on_search_enter)
-
-    listbox = tk.Listbox(root)
-    listbox.pack(fill=tk.BOTH, expand=True)
-
-    add_button = tk.Button(root, text="Add", command=add_macro)
-    add_button.pack(side=tk.LEFT)
-
-    edit_button = tk.Button(root, text="Edit", command=edit_macro)
-    edit_button.pack(side=tk.LEFT)
-
-    delete_button = tk.Button(root, text="Delete", command=delete_macro)
-    delete_button.pack(side=tk.LEFT)
-
-    listbox.bind('<Return>', on_enter)
-
-    macros = load_macros()
-    refresh_listbox()
-
-    root.protocol("WM_DELETE_WINDOW", on_closing)
+    root.attributes('-topmost', False)  # Remove topmost attribute
     
-    # After a short delay, remove the topmost attribute
-    root.after(100, lambda: root.attributes('-topmost', False))
-    
-    root.mainloop()
+    if search_entry:
+        search_entry.focus_set()  # Set focus to the search box
 
 def on_closing():
     global root
     root.withdraw()
 
+current_keys = set()
+stop_event = threading.Event()
+
+def process_ui_events():
+    try:
+        while True:
+            function = ui_queue.get_nowait()
+            function()
+            ui_queue.task_done()
+    except queue.Empty:
+        pass
+    if not stop_event.is_set():
+        root.after(100, process_ui_events)
+
 def on_activate():
     logging.info("Hotkey detected, showing Macro Manager")
-    create_and_show_window()
+    ui_queue.put(create_and_show_window)
 
 def on_press(key):
     global current_keys
@@ -239,6 +257,9 @@ def on_press(key):
 def on_release(key):
     global current_keys
     logging.debug(f"Key released: {key}")
+
+    if stop_event.is_set():
+        return False
     
     if isinstance(key, keyboard.Key):
         current_keys.discard(key)
@@ -253,43 +274,34 @@ def check_hotkey():
     alt = keyboard.Key.alt_l in current_keys or keyboard.Key.alt_r in current_keys
     t_key = 't' in current_keys or 84 in current_keys  # 84 is the virtual key code for 'T'
     
-    hotkey_pressed = ctrl and alt and t_key
-    if hotkey_pressed:
-        logging.info(f"Hotkey detected. Current keys: {current_keys}")
-    
-    return hotkey_pressed
+    return ctrl and alt and t_key
 
 def listen_keyboard():
-    global running
-    logging.info("Starting keyboard listener")
     with keyboard.Listener(on_press=on_press, on_release=on_release) as listener:
-        while running:
-            if not listener.running:
-                logging.warning("Listener stopped running")
-                break
-            time.sleep(0.1)
-    logging.info("Keyboard listener stopped")
+        listener.join()
 
 if __name__ == "__main__":
     logging.info("Starting Macro Manager main execution")
     
     listener_thread = threading.Thread(target=listen_keyboard)
+    listener_thread.daemon = True
     listener_thread.start()
     logging.info("Keyboard listener thread started")
     
     print("Macro Manager is running. Use Ctrl+Alt+T to open the manager, or Ctrl+C here to exit.")
     
+    create_and_show_window()  # Create the initial window in the main thread
+    root.after(100, process_ui_events)  # Start processing UI events
+    
     try:
-        while running:
-            time.sleep(0.1)
+        root.mainloop()
     except KeyboardInterrupt:
         logging.info("KeyboardInterrupt detected, exiting Macro Manager")
-        print("\nExiting Macro Manager...")
+        print("\nStopping the Macro Manager...")
     finally:
+        stop_event.set()
         logging.info("Cleaning up before exit")
-        running = False
         if root:
             root.quit()
-        listener_thread.join()
-
+    
     logging.info("Exiting Python script")
