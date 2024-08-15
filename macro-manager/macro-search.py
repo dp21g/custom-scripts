@@ -144,7 +144,7 @@ def refresh_listbox(search_query=''):
         for key in macros.keys():
             if search_query.lower() in key.lower():
                 listbox.insert(tk.END, key)
-    logging.debug(f"Listbox contents: {list(macros.keys())}")
+    logging.debug(f"Listbox contents after filtering: {[listbox.get(i) for i in range(listbox.size())]}")
 
 def on_search_enter(event):
     if listbox.size() > 0:
@@ -170,7 +170,7 @@ stop_event = threading.Event()
 ui_queue = queue.Queue()
 
 def create_and_show_window():
-    global root, listbox, search_entry
+    global root, listbox, search_entry, search_var
     if root is None or not root.winfo_exists():
         root = tk.Tk()
         root.title("Macro Manager")
