@@ -1,4 +1,5 @@
 import tkinter as tk
+from tkinter import ttk
 import json
 import os
 import ctypes
@@ -27,6 +28,24 @@ running = True
 
 # Hotkey state
 current_keys = set()
+
+# Caps Lock detection variables
+caps_lock_presses = []
+CAPS_LOCK_THRESHOLD = 0.5  # Time threshold in seconds
+
+def check_triple_caps_lock():
+    global caps_lock_presses
+    now = time.time()
+    
+    # Remove old presses
+    caps_lock_presses = [t for t in caps_lock_presses if now - t < CAPS_LOCK_THRESHOLD]
+    
+    # Check if we have 3 presses within the threshold
+    if len(caps_lock_presses) == 3:
+        caps_lock_presses.clear()  # Reset the presses
+        return True
+    return False
+
 
 def paste_in_last_app():
     logging.info("Minimizing the window")
@@ -169,6 +188,20 @@ current_keys = set()
 stop_event = threading.Event()
 ui_queue = queue.Queue()
 
+
+def on_double_click(event):
+    selected = listbox.get(listbox.curselection())
+    if selected:
+        send_to_app(macros[selected]["command"])
+
+def on_button_click(action):
+    if action == "Add":
+        add_macro()
+    elif action == "Edit":
+        edit_macro()
+    elif action == "Delete":
+        delete_macro()
+
 def create_and_show_window():
     global root, listbox, search_entry, search_var
     if root is None or not root.winfo_exists():
@@ -180,25 +213,44 @@ def create_and_show_window():
         center_window(root, window_width, window_height)
         root.resizable(True, True)
 
+        # Apply a theme for better appearance
+        style = ttk.Style()
+        style.theme_use('clam')
+
+        main_frame = ttk.Frame(root, padding="10")
+        main_frame.pack(fill=tk.BOTH, expand=True)
+
         search_var = tk.StringVar()
         search_var.trace("w", update_listbox)
-        search_entry = tk.Entry(root, textvariable=search_var)
-        search_entry.pack(fill=tk.X, padx=5, pady=5)
+        search_entry = ttk.Entry(main_frame, textvariable=search_var, font=('Arial', 12))
+        search_entry.pack(fill=tk.X, padx=5, pady=10)
 
-        listbox = tk.Listbox(root)
-        listbox.pack(fill=tk.BOTH, expand=True)
+        listbox = tk.Listbox(main_frame, font=('Arial', 12))
+        listbox.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
+        listbox.bind('<Double-1>', on_double_click)
 
-        add_button = tk.Button(root, text="Add", command=add_macro)
-        add_button.pack(side=tk.LEFT)
+        # Add key bindings for navigation
+        search_entry.bind('<Down>', lambda event: move_focus_to_listbox(event))
+        listbox.bind('<Up>', lambda event: move_focus_to_search(event))
 
-        edit_button = tk.Button(root, text="Edit", command=edit_macro)
-        edit_button.pack(side=tk.LEFT)
+        button_frame = ttk.Frame(main_frame)
+        button_frame.pack(fill=tk.X, padx=5, pady=10)
 
-        delete_button = tk.Button(root, text="Delete", command=delete_macro)
-        delete_button.pack(side=tk.LEFT)
+        button_width = 15
+        button_style = ttk.Style()
+        button_style.configure('TButton', font=('Arial', 12), padding=5)
+
+        for text in ["Add", "Edit", "Delete"]:
+            btn = ttk.Button(button_frame, text=text, width=button_width, 
+                             command=lambda t=text: on_button_click(t))
+            btn.pack(side=tk.LEFT, expand=True, padx=5)
 
         listbox.bind('<Return>', on_enter)
         search_entry.bind('<Return>', on_search_enter)
+
+        # Enable keyboard navigation for buttons
+        for child in button_frame.winfo_children():
+            child.bind('<Return>', lambda event, b=child: b.invoke())
 
         root.protocol("WM_DELETE_WINDOW", on_closing)
 
@@ -207,15 +259,31 @@ def create_and_show_window():
         macros = load_macros()
         refresh_listbox()
 
-    root.deiconify()  # Ensure the window is visible
-    root.lift()  # Bring the window to the front
-    root.focus_force()  # Force focus on the window
-    root.attributes('-topmost', True)  # Make the window topmost
+    root.deiconify()
+    root.lift()
+    root.focus_force()
+    root.attributes('-topmost', True)
     root.update()
-    root.attributes('-topmost', False)  # Remove topmost attribute
+    root.attributes('-topmost', False)
     
     if search_entry:
-        search_entry.focus_set()  # Set focus to the search box
+        search_entry.focus_set()
+
+def move_focus_to_listbox(event):
+    if listbox.size() > 0:
+        listbox.selection_clear(0, tk.END)
+        listbox.selection_set(0)
+        listbox.activate(0)
+        listbox.focus_set()
+
+def move_focus_to_search(event):
+    if listbox.curselection() == (0,):
+        search_entry.focus_set()
+        search_entry.icursor(tk.END)
+    else:
+        listbox.selection_clear(0, tk.END)
+        listbox.selection_set(0)
+        listbox.activate(0)
 
 def on_closing():
     global root
@@ -240,41 +308,24 @@ def on_activate():
     ui_queue.put(create_and_show_window)
 
 def on_press(key):
-    global current_keys
+    global caps_lock_presses
     logging.debug(f"Key pressed: {key}")
     
-    if isinstance(key, keyboard.Key):
-        current_keys.add(key)
-    elif isinstance(key, keyboard.KeyCode):
-        if key.char:
-            current_keys.add(key.char.lower())
-        else:
-            current_keys.add(key.vk)
-    
-    if check_hotkey():
-        on_activate()
+    if key == keyboard.Key.caps_lock:
+        caps_lock_presses.append(time.time())
+        if check_triple_caps_lock():
+            on_activate()
 
 def on_release(key):
-    global current_keys
-    logging.debug(f"Key released: {key}")
-
     if stop_event.is_set():
         return False
-    
-    if isinstance(key, keyboard.Key):
-        current_keys.discard(key)
-    elif isinstance(key, keyboard.KeyCode):
-        if key.char:
-            current_keys.discard(key.char.lower())
-        else:
-            current_keys.discard(key.vk)
 
 def check_hotkey():
     ctrl = keyboard.Key.ctrl_l in current_keys or keyboard.Key.ctrl_r in current_keys
-    alt = keyboard.Key.alt_l in current_keys or keyboard.Key.alt_r in current_keys
+    option_win = keyboard.Key.cmd in current_keys or keyboard.Key.alt_l in current_keys or keyboard.Key.alt_r in current_keys
     t_key = 't' in current_keys or 84 in current_keys  # 84 is the virtual key code for 'T'
     
-    return ctrl and alt and t_key
+    return ctrl and option_win and t_key
 
 def listen_keyboard():
     with keyboard.Listener(on_press=on_press, on_release=on_release) as listener:
@@ -288,7 +339,7 @@ if __name__ == "__main__":
     listener_thread.start()
     logging.info("Keyboard listener thread started")
     
-    print("Macro Manager is running. Use Ctrl+Alt+T to open the manager, or Ctrl+C here to exit.")
+    print("Macro Manager is running. Press Caps Lock quickly 3 times to open the manager, or Ctrl+C here to exit.")
     
     create_and_show_window()  # Create the initial window in the main thread
     root.after(100, process_ui_events)  # Start processing UI events

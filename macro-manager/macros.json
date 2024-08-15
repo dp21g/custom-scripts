@@ -1,18 +1,22 @@
 {
-    "test1": {
-        "command": "cd go to test1",
+    "cd run promise dev": {
+        "command": "npm run dev -- --open",
         "action": "Send"
     },
-    "cd to promise land": {
-        "command": "cd c:/promise/land",
+    "cd to promise folder": {
+        "command": "cd C:\\Users\\mail\\github\\121Dating",
         "action": "Send"
     },
-    "promise": {
-        "command": "cd promise",
+    "run find fvg python script": {
+        "command": "cd C:\\Users\\mail\\github\\find-fvg && python find-fvg.py",
         "action": "Send"
     },
-    "where ar we going to": {
-        "command": "to here",
+    "run find fvg server html": {
+        "command": "cd C:\\Users\\mail\\github\\find-fvg && python -m http.server 8000",
+        "action": "Send"
+    },
+    "cd to fvg": {
+        "command": "C:\\Users\\mail\\github\\find-fvg",
         "action": "Send"
     }
 }
