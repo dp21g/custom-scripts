@@ -1,0 +1,18 @@
+{
+    "test1": {
+        "command": "cd go to test1",
+        "action": "Send"
+    },
+    "cd to promise land": {
+        "command": "cd c:/promise/land",
+        "action": "Send"
+    },
+    "promise": {
+        "command": "cd promise",
+        "action": "Send"
+    },
+    "where ar we going to": {
+        "command": "to here",
+        "action": "Send"
+    }
+}

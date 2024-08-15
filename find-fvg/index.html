@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Top 10 USDT Coins Fair Value Gap Analysis</title>
+    <link rel="stylesheet" type="text/css" href="https://cdn.datatables.net/1.10.24/css/jquery.dataTables.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js"></script>
+    <script src="https://cdn.datatables.net/1.10.24/js/jquery.dataTables.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/moment.js/2.29.1/moment.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/moment-timezone/0.5.33/moment-timezone-with-data.min.js"></script>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 0; padding: 20px; }
+        #error-message { color: red; }
+        #fvgTable tbody tr:hover {
+            background-color: #f5f5f5 !important;
+            cursor: pointer;
+        }
+        .fvg-2h1h30m-bearish { background-color: #FF6347 !important; }
+        .fvg-2h1h30m-bullish { background-color: #32CD32 !important; }
+        .fvg-1h30m15m-bearish { background-color: #FFA500 !important; }
+        .fvg-1h30m15m-bullish { background-color: #98FB98 !important; }
+    </style>
+</head>
+<body>
+    <h1>Top 10 USDT Coins Fair Value Gap Analysis</h1>
+    <div id="error-message"></div>
+    <div id="fvg-table"></div>
+    <div id="row-count"></div>
+
+    <script>
+        function formatDateTime(dateTimeString) {
+            return moment(dateTimeString).tz('America/New_York').format('YYYY-MM-DD HH:mm:ss z');
+        }
+
+        function getRowClass(fvg) {
+            if (fvg.timeframes === '2h, 1h, 30m') {
+                return fvg.type === 'bearish' ? 'fvg-2h1h30m-bearish' : 'fvg-2h1h30m-bullish';
+            } else if (fvg.timeframes === '1h, 30m, 15m') {
+                return fvg.type === 'bearish' ? 'fvg-1h30m15m-bearish' : 'fvg-1h30m15m-bullish';
+            }
+            return '';
+        }
+
+        fetch('fvg_data.json')
+            .then(response => response.json())
+            .then(data => {
+                const tableHTML = `
+                    <table id="fvgTable">
+                        <thead>
+                            <tr>
+                                <th>Coin</th>
+                                <th>Start Time (NY)</th>
+                                <th>End Time (NY)</th>
+                                <th>Timeframes</th>
+                                <th>Type</th>
+                                <th>2h High-Low</th>
+                                <th>1h High-Low</th>
+                                <th>30m High-Low</th>
+                                <th>15m High-Low</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${data.map(fvg => `
+                                <tr class="${getRowClass(fvg)}">
+                                    <td>${fvg.symbol}</td>
+                                    <td>${formatDateTime(fvg.start_time)}</td>
+                                    <td>${formatDateTime(fvg.end_time)}</td>
+                                    <td>${fvg.timeframes}</td>
+                                    <td>${fvg.type}</td>
+                                    <td>${fvg.fvgs['2h'] ? fvg.fvgs['2h'][0].high.toFixed(2) + ' - ' + fvg.fvgs['2h'][0].low.toFixed(2) : 'N/A'}</td>
+                                    <td>${fvg.fvgs['1h'][0].high.toFixed(2)} - ${fvg.fvgs['1h'][0].low.toFixed(2)}</td>
+                                    <td>${fvg.fvgs['30m'][0].high.toFixed(2)} - ${fvg.fvgs['30m'][0].low.toFixed(2)}</td>
+                                    <td>${fvg.fvgs['15m'] ? fvg.fvgs['15m'][0].high.toFixed(2) + ' - ' + fvg.fvgs['15m'][0].low.toFixed(2) : 'N/A'}</td>
+                                </tr>
+                            `).join('')}
+                        </tbody>
+                    </table>
+                `;
+                document.getElementById('fvg-table').innerHTML = tableHTML;
+                document.getElementById('row-count').textContent = `Total Overlapping FVGs: ${data.length}`;
+
+                $('#fvgTable').DataTable({
+                    order: [[1, 'desc']],  // Sort by start time descending by default
+                    pageLength: 25,  // Show 25 entries per page
+                    lengthMenu: [[10, 25, 50, -1], [10, 25, 50, "All"]],
+                    columnDefs: [
+                        { type: 'date', targets: [1, 2] }  // Use date sorting for start and end time columns
+                    ]
+                });
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                document.getElementById('error-message').textContent = 'Error loading data. Please try refreshing the page.';
+            });
+    </script>
+</body>
+</html>

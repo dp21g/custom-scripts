@@ -1,0 +1,24 @@
+name=start promise dev
+type=1
+command=npm run dev -- --open
+
+name=CD to promise ring
+type=1
+command=cd C:\Users\mail\github\121Dating{Enter}
+
+name=Open Notepad
+type=2
+command=notepad.exe
+
+name=run find fvg python script
+type=1
+command=python find-fvg.py
+
+name=Run find fvg server html
+type=1
+command=python -m http.server 8000
+
+name=CD to fvg
+type=1
+command=cd C:\Users\mail\github\find-fvg{Enter}
+
